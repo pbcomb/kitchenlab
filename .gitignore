@@ -1,3 +1,2 @@
-.env.example
-client/node_modules
-server/node_modules
+.dev.env
+node_modules

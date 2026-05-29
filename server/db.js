@@ -1,15 +1,56 @@
 const { Pool } = require('pg');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('render')
+let pool;
+
+function createPool() {
+  let connectionString = process.env.DATABASE_URL;
+
+  if (!connectionString) {
+    console.error('DATABASE_URL environment variable is not set');
+    process.exit(1);
+  }
+
+  // Strip surrounding quotes if present (common when copying from .env)
+  connectionString = connectionString.replace(/^['"]|['"]$/g, '');
+
+  // Parse and rebuild the URL to ensure password is properly encoded
+  try {
+    const url = new URL(connectionString);
+    if (url.password) {
+      // Encode special characters in password
+      url.password = encodeURIComponent(decodeURIComponent(url.password));
+      connectionString = url.toString();
+    }
+  } catch (e) {
+    console.warn('Could not parse DATABASE_URL, using as-is');
+  }
+
+  const ssl = process.env.NODE_ENV === 'production' || connectionString.includes('render') || connectionString.includes('railway')
     ? { rejectUnauthorized: false }
-    : false,
-});
+    : false;
+
+  pool = new Pool({
+    connectionString,
+    ssl,
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+  });
+
+  pool.on('error', (err) => {
+    console.error('Unexpected pool error:', err.message);
+  });
+}
+
+createPool();
 
 async function initDB() {
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
+    // Test the connection
+    await client.query('SELECT 1');
+    console.log('Database connected successfully');
+    
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -85,8 +126,11 @@ async function initDB() {
       END $$;
     `);
     console.log('Database initialized successfully');
+  } catch (err) {
+    console.error('Database error:', err.message);
+    throw err;
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 

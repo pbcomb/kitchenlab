@@ -1,6 +1,16 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const dotenv = require('dotenv');
+const fs = require('fs');
+
+// Load environment variables from .dev.env or .env
+const envFile = fs.existsSync(path.join(__dirname, '../.dev.env'))
+  ? path.join(__dirname, '../.dev.env')
+  : path.join(__dirname, '../.env');
+dotenv.config({ path: envFile });
+console.log(`Loaded environment from: ${envFile}`);
+
 const { initDB } = require('./db');
 
 const authRoutes = require('../routes/auth');
